@@ -1,0 +1,107 @@
+//! Wrapper to access Taskwarrior database.
+
+use std::collections::HashMap;
+use std::ffi::OsStr;
+use std::io;
+use std::os::unix::ffi::OsStrExt;
+use std::path::PathBuf;
+use std::process::Command;
+
+pub struct TaskDb {
+    pub data_location: PathBuf,
+    pub tasks: HashMap<String, Task>,
+}
+
+impl TaskDb {
+    pub fn new(command_path: &OsStr) -> io::Result<TaskDb> {
+        // Get path where undo.data file.
+        let data_location = match get_data_location(command_path)? {
+            Some(dl) => dl,
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Missing data.location",
+                ))
+            }
+        };
+
+        // Load task data.
+        let tasks = get_tasks(command_path)?;
+
+        Ok(TaskDb {
+            data_location,
+            tasks,
+        })
+    }
+}
+
+/// Execute the task command and capture its output.
+fn run_cli(path: &OsStr, arg: &str) -> io::Result<Vec<u8>> {
+    let stdout = Command::new(path).arg(arg).output()?.stdout;
+
+    Ok(stdout)
+}
+
+/// Extract from Taskwarrior configuration the value of the data.location item.
+fn get_data_location(path: &OsStr) -> io::Result<Option<PathBuf>> {
+    let output = run_cli(path, "_show")?;
+    let mut last_index = 0;
+    for index in memchr::memchr_iter(b'\n', &output) {
+        let mut parts = output[last_index..index].split(|b| *b == b'=');
+        if parts.next() == Some(b"data.location") {
+            return Ok(parts.next().map(|p| PathBuf::from(OsStr::from_bytes(p))));
+        }
+
+        last_index = index + 1;
+    }
+
+    Ok(None)
+}
+
+/// Task data read from the export command.
+#[derive(serde::Deserialize)]
+pub struct Task {
+    pub id: Option<isize>,
+    pub uuid: Option<String>,
+    pub description: Option<String>,
+    pub project: Option<String>,
+    pub status: Option<String>,
+}
+
+pub fn get_tasks(path: &OsStr) -> io::Result<HashMap<String, Task>> {
+    let output = run_cli(path, "export")?;
+    let tasks: Vec<Task> = serde_json::from_slice(&output)?;
+
+    let mut map = HashMap::with_capacity(tasks.len());
+    for task in tasks {
+        if let Some(uuid) = &task.uuid {
+            map.insert(uuid.clone(), task);
+        }
+    }
+
+    Ok(map)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TaskDb;
+    use std::ffi::OsStr;
+    use std::path::PathBuf;
+
+    #[test]
+    fn load_task_data() {
+        let task_db = TaskDb::new(OsStr::new("src/tests/task_mock.sh")).unwrap();
+
+        assert_eq!(task_db.data_location, PathBuf::from("src/tests"));
+
+        assert_eq!(task_db.tasks.len(), 2);
+        assert_eq!(
+            task_db
+                .tasks
+                .get("e505f4ba-cb73-42a7-9301-a4b2c68533c9")
+                .unwrap()
+                .id,
+            Some(2)
+        );
+    }
+}
