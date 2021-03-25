@@ -5,6 +5,7 @@ use std::ffi::OsString;
 use std::io;
 
 mod changes;
+mod pager;
 mod taskdb;
 
 /// Default path for the Taskwarrior command.
@@ -17,14 +18,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let changes_limit = get_changes_limit()?;
     let taskdb = taskdb::TaskDb::new(&task_command())?;
 
-    // TODO: send to a pager
-    let stdout_handle = io::stdout();
-    let mut stdout = io::BufWriter::new(stdout_handle.lock());
+    let stdout_handle;
+    let pager_command;
+    let mut output: Box<dyn io::Write>;
+
+    match pager::command() {
+        None => {
+            pager_command = None;
+            stdout_handle = io::stdout();
+            output = Box::new(io::BufWriter::new(stdout_handle.lock()));
+        }
+
+        Some(mut command) => {
+            let mut command = command.spawn()?;
+            output = Box::new(command.stdin.take().unwrap());
+            pager_command = Some(command);
+        }
+    }
 
     for change in taskdb.changes.iter().rev().take(changes_limit) {
-        if changes::show(&taskdb, &change, &mut stdout).is_err() {
+        if changes::show(&taskdb, &change, &mut output).is_err() {
             break;
         }
+    }
+
+    drop(output);
+    if let Some(mut command) = pager_command {
+        let _ = command.wait();
     }
 
     Ok(())
