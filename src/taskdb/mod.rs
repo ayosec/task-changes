@@ -9,8 +9,10 @@ use std::process::Command;
 
 mod undodata;
 
+pub use undodata::Change;
+
 pub struct TaskDb {
-    pub changes: Vec<undodata::Change>,
+    pub changes: Vec<Change>,
     pub tasks: HashMap<String, Task>,
 }
 
@@ -49,7 +51,11 @@ fn get_data_location(path: &OsStr) -> io::Result<Option<PathBuf>> {
     for index in memchr::memchr_iter(b'\n', &output) {
         let mut parts = output[last_index..index].split(|b| *b == b'=');
         if parts.next() == Some(b"data.location") {
-            return Ok(parts.next().map(|p| PathBuf::from(OsStr::from_bytes(p))));
+            return Ok(parts.next().and_then(|p| match p {
+                [b'~', b'/', tail @ ..] => std::env::var_os("HOME")
+                    .map(|home| PathBuf::from(home).join(OsStr::from_bytes(tail))),
+                path => Some(PathBuf::from(OsStr::from_bytes(path))),
+            }));
         }
 
         last_index = index + 1;

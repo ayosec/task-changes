@@ -18,7 +18,7 @@ use nom::{
 
 #[derive(Debug, Default)]
 pub struct Change {
-    pub time: u64,
+    pub time: i64,
     pub old: Option<HashMap<String, String>>,
     pub new: HashMap<String, String>,
 }
@@ -52,12 +52,12 @@ fn space(i: &[u8]) -> IResult<&[u8], &[u8], Error> {
 
 #[derive(Debug)]
 enum ChangeFragment {
-    Time(u64),
+    Time(i64),
     Old(HashMap<String, String>),
     New(HashMap<String, String>),
 }
 
-fn integer(i: &[u8]) -> IResult<&[u8], u64, Error> {
+fn integer(i: &[u8]) -> IResult<&[u8], i64, Error> {
     map_res(preceded(space, digit1), |i| {
         std::str::from_utf8(i).unwrap().parse()
     })(i)
