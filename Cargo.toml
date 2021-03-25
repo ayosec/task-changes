@@ -3,6 +3,7 @@ name = "task-changes"
 version = "0.1.0"
 authors = ["ayosec@gmail.com"]
 edition = "2018"
+license = "Apache-2.0"
 
 [dependencies]
 atty = "0.2.14"
