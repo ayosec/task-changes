@@ -3,7 +3,9 @@ name = "task-changes"
 version = "0.1.0"
 authors = ["ayosec@gmail.com"]
 edition = "2018"
+description = "Show changes in a Taskwarrior database."
 license = "Apache-2.0"
+readme = "README.md"
 
 [dependencies]
 atty = "0.2.14"
