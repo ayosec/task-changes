@@ -45,25 +45,33 @@ fn run_cli(path: &OsStr, arg: &str) -> io::Result<Vec<u8>> {
 }
 
 /// Extract from Taskwarrior configuration the value of the data.location item.
+#[allow(clippy::never_loop)]
 fn get_data_location(path: &OsStr) -> io::Result<Option<PathBuf>> {
     let output = run_cli(path, "_show")?;
-    let mut last_index = 0;
-    for index in memchr::memchr_iter(b'\n', &output) {
-        let mut parts = output[last_index..index].split(|b| *b == b'=');
-        if parts.next() == Some(b"data.location") {
-            return Ok(parts
-                .next()
-                .and_then(|path| match path.strip_prefix(b"~/") {
-                    Some(tail) => std::env::var_os("HOME")
-                        .map(|home| PathBuf::from(home).join(OsStr::from_bytes(tail))),
-                    None => Some(PathBuf::from(OsStr::from_bytes(path))),
-                }));
+    let mut last = 0;
+
+    let data_location = 'result: loop {
+        for index in memchr::memchr_iter(b'\n', &output) {
+            if let Some(value) = output[last..index].strip_prefix(b"data.location=") {
+                break 'result value;
+            }
+
+            last = index + 1;
         }
 
-        last_index = index + 1;
-    }
+        return Ok(None);
+    };
 
-    Ok(None)
+    let path = match data_location.strip_prefix(b"~/") {
+        Some(tail) => {
+            let tail = OsStr::from_bytes(tail);
+            std::env::var_os("HOME").map(|h| PathBuf::from(h).join(tail))
+        }
+
+        None => Some(PathBuf::from(OsStr::from_bytes(data_location))),
+    };
+
+    Ok(path)
 }
 
 /// Task data read from the export command.

@@ -58,8 +58,8 @@ enum ChangeFragment {
 }
 
 fn integer(i: &[u8]) -> IResult<&[u8], i64, Error> {
-    map_res(preceded(space, digit1), |i| {
-        std::str::from_utf8(i).unwrap().parse()
+    map(preceded(space, digit1), |i| {
+        i.iter().fold(0, |a, b| a * 10 + (*b - b'0') as i64)
     })(i)
 }
 
