@@ -7,8 +7,10 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::process::Command;
 
+mod undodata;
+
 pub struct TaskDb {
-    pub data_location: PathBuf,
+    pub changes: Vec<undodata::Change>,
     pub tasks: HashMap<String, Task>,
 }
 
@@ -25,13 +27,11 @@ impl TaskDb {
             }
         };
 
-        // Load task data.
         let tasks = get_tasks(command_path)?;
 
-        Ok(TaskDb {
-            data_location,
-            tasks,
-        })
+        let changes = undodata::parse(data_location.join("undo.data"))?;
+
+        Ok(TaskDb { changes, tasks })
     }
 }
 
@@ -86,13 +86,12 @@ pub fn get_tasks(path: &OsStr) -> io::Result<HashMap<String, Task>> {
 mod tests {
     use super::TaskDb;
     use std::ffi::OsStr;
-    use std::path::PathBuf;
 
     #[test]
     fn load_task_data() {
-        let task_db = TaskDb::new(OsStr::new("src/tests/task_mock.sh")).unwrap();
+        let task_db = TaskDb::new(OsStr::new("src/taskdb/tests/task_mock.sh")).unwrap();
 
-        assert_eq!(task_db.data_location, PathBuf::from("src/tests"));
+        // Data from `task export`.
 
         assert_eq!(task_db.tasks.len(), 2);
         assert_eq!(
@@ -103,5 +102,21 @@ mod tests {
                 .id,
             Some(2)
         );
+
+        // Changes in `undo.data` file.
+
+        assert_eq!(task_db.changes.len(), 5);
+        assert_eq!(task_db.changes[0].time, 1616626518);
+
+        let change = &task_db.changes[4];
+        assert_eq!(change.time, 1616626594);
+        assert_eq!(change.new["annotation_1616626594"].as_str(), "a\nb");
+
+        let old = change.old.as_ref().unwrap();
+        assert_eq!(
+            old["annotation_1616626556"],
+            r#"http://example.com: "data""#
+        );
+        assert_eq!(old["tags"], "next");
     }
 }
