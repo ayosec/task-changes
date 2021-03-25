@@ -4,7 +4,9 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 
 use crate::taskdb::{Change, TaskDb};
+
 use chrono::{Local, TimeZone};
+use colored::Colorize;
 
 pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io::Result<()> {
     let local_time = Local.timestamp(change.time, 0);
@@ -20,7 +22,7 @@ pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io
             }
 
             if let Some(description) = &task.description {
-                write!(output, " {}", description)?;
+                write!(output, " {}", description.bold())?;
             }
         }
     }
@@ -38,7 +40,7 @@ pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io
 
 pub fn new_fields(output: &mut impl io::Write, fields: &HashMap<String, String>) -> io::Result<()> {
     for (key, value) in fields {
-        writeln!(output, "  {}: {}", key, value)?;
+        writeln!(output, "  {}: {}", key, value.green())?;
     }
 
     Ok(())
@@ -70,11 +72,11 @@ pub fn diff(
         writeln!(output, "  {}:", field)?;
 
         if let Some(value) = old_value {
-            writeln!(output, "    - {}", value)?;
+            writeln!(output, "    - {}", value.red())?;
         }
 
         if let Some(value) = new_value {
-            writeln!(output, "    + {}", value)?;
+            writeln!(output, "    + {}", value.green())?;
         }
     }
 

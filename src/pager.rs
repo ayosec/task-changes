@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 
 pub const PAGER_ENV: &str = "TASKWARRIOR_PAGER";
 
-const DEFAULT_PAGER: &str = if cfg!(windows) { "more" } else { "pager -F" };
+const DEFAULT_PAGER: &str = if cfg!(windows) { "more" } else { "pager -F -R" };
 
 pub fn command() -> Option<Command> {
     if !atty::is(atty::Stream::Stdout) {
