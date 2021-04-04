@@ -11,6 +11,7 @@ readme = "README.md"
 atty = "0.2.14"
 chrono = "0.4.19"
 colored = "2.0.0"
+lazy_static = "1.4.0"
 memchr = "2.3.4"
 nom = "6.1.2"
 serde = { version = "1.0", features = ["derive"] }

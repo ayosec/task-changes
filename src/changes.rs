@@ -1,7 +1,9 @@
 //! Print changes from the Taskwarrior database.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io;
+use std::ops::RangeInclusive;
 
 use crate::taskdb::{Change, TaskDb};
 
@@ -40,7 +42,7 @@ pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io
 
 pub fn new_fields(output: &mut impl io::Write, fields: &HashMap<String, String>) -> io::Result<()> {
     for (key, value) in fields {
-        writeln!(output, "  {}: {}", key, value.green())?;
+        writeln!(output, "  {}: {}", key, format_value(value).green())?;
     }
 
     Ok(())
@@ -72,13 +74,37 @@ pub fn diff(
         writeln!(output, "  {}:", field)?;
 
         if let Some(value) = old_value {
-            writeln!(output, "    - {}", value.red())?;
+            writeln!(output, "    - {}", format_value(value).red())?;
         }
 
         if let Some(value) = new_value {
-            writeln!(output, "    + {}", value.green())?;
+            writeln!(output, "    + {}", format_value(value).green())?;
         }
     }
 
     Ok(())
+}
+
+/// Format a value read from the undo database.
+///
+/// If the value looks like a timestamp, it returns a formatted date.
+/// If not, it returns the original value.
+fn format_value(value: &str) -> Cow<str> {
+    lazy_static::lazy_static! {
+        static ref TIME_RANGE: RangeInclusive<i64> = {
+            const YEAR: i64 = 365 * 24 * 24 * 60 * 60;
+            let now = chrono::Utc::now().timestamp();
+            now - YEAR..=now + YEAR
+        };
+    }
+
+    // Try to convert the value to a timestamp.
+    if let Ok(ts) = value.parse() {
+        if TIME_RANGE.contains(&ts) {
+            let localtime = chrono::Local.timestamp(ts, 0);
+            return localtime.format("%F %X %Z").to_string().into();
+        }
+    }
+
+    value.into()
 }
