@@ -3,7 +3,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io;
-use std::ops::RangeInclusive;
 
 use crate::taskdb::{Change, TaskDb};
 
@@ -91,20 +90,50 @@ pub fn diff(
 /// If not, it returns the original value.
 fn format_value(value: &str) -> Cow<str> {
     lazy_static::lazy_static! {
-        static ref TIME_RANGE: RangeInclusive<i64> = {
-            const YEAR: i64 = 365 * 24 * 24 * 60 * 60;
-            let now = chrono::Utc::now().timestamp();
-            now - YEAR..=now + YEAR
-        };
+        static ref NOW: i64 = chrono::Utc::now().timestamp();
     }
+
+    const YEAR: i64 = 365 * 24 * 60 * 60;
+    let time_range = *NOW - YEAR..=*NOW + YEAR;
 
     // Try to convert the value to a timestamp.
     if let Ok(ts) = value.parse() {
-        if TIME_RANGE.contains(&ts) {
+        if time_range.contains(&ts) {
             let localtime = chrono::Local.timestamp(ts, 0);
-            return localtime.format("%F %X %Z").to_string().into();
+            let delta = delta_time(*NOW - ts);
+            return format!("{}{}", localtime.format("%F %X %Z"), delta).into();
         }
     }
 
     value.into()
+}
+
+/// Format a string to represent the time distance.
+fn delta_time(delta: i64) -> String {
+    let delta_abs = delta.abs();
+
+    if delta_abs > 90 * 24 * 60 * 60 {
+        // Ignore +90 days
+        return String::new();
+    };
+
+    let value;
+    let unit;
+
+    if delta_abs > 3 * 24 * 60 * 60 {
+        value = delta_abs / (24 * 60 * 60);
+        unit = "days";
+    } else if delta_abs > 2 * 60 * 60 {
+        value = delta_abs / (60 * 60);
+        unit = "hours";
+    } else if delta_abs > 2 * 60 {
+        value = delta_abs / 60;
+        unit = "minutes";
+    } else {
+        value = delta_abs;
+        unit = "seconds";
+    }
+
+    let suffix = if delta > 0 { "ago" } else { "from now" };
+    format!(" ({} {} {})", value, unit, suffix)
 }
