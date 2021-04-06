@@ -18,14 +18,14 @@ $ task-changes 2
   annotation_1616626556:
     + http://example.com: "data"
   modified:
-    - 1616626518
-    + 1616626556
+    - 2021-03-24 22:55:26 +00:00 (2 days ago)
+    + 2021-03-24 22:55:28 +00:00 (2 days ago)
 
 2021-03-24 22:55:26 [2] Quasi concordia
   project: second
   description: Quasi concordia
-  modified: 1616626526
+  modified: 2021-03-24 22:55:28 +00:00 (2 days ago)
   status: pending
   uuid: e505f4ba-cb73-42a7-9301-a4b2c68533c9
-  entry: 1616626526
+  entry: 2021-03-24 22:55:28 +00:00 (2 days ago)
 ```
