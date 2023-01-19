@@ -4,7 +4,7 @@ Show changes in a [Taskwarrior](https://taskwarrior.org/) database, similar to `
 
 ## Usage
 
-    $ task-changes [count]
+    $ task-changes [-s, --short] [count]
 
 If `count` is omitted, it shows all changes in the `undo.data` file.
 

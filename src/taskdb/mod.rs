@@ -2,10 +2,11 @@
 
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::process::Command;
+
+use anyhow::Context;
 
 mod undodata;
 
@@ -17,15 +18,12 @@ pub struct TaskDb {
 }
 
 impl TaskDb {
-    pub fn new(command_path: &OsStr) -> io::Result<TaskDb> {
+    pub fn new(command_path: &OsStr) -> anyhow::Result<TaskDb> {
         // Get path where undo.data file.
         let data_location = match get_data_location(command_path)? {
             Some(dl) => dl,
             None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "Missing data.location",
-                ))
+                anyhow::bail!("Missing data.location")
             }
         };
 
@@ -38,15 +36,19 @@ impl TaskDb {
 }
 
 /// Execute the task command and capture its output.
-fn run_cli(path: &OsStr, arg: &str) -> io::Result<Vec<u8>> {
-    let stdout = Command::new(path).arg(arg).output()?.stdout;
+fn run_cli(path: &OsStr, arg: &str) -> anyhow::Result<Vec<u8>> {
+    let stdout = Command::new(path)
+        .arg(arg)
+        .output()
+        .with_context(|| format!("Failed to execute {:?}", path))?
+        .stdout;
 
     Ok(stdout)
 }
 
 /// Extract from Taskwarrior configuration the value of the data.location item.
 #[allow(clippy::never_loop)]
-fn get_data_location(path: &OsStr) -> io::Result<Option<PathBuf>> {
+fn get_data_location(path: &OsStr) -> anyhow::Result<Option<PathBuf>> {
     let output = run_cli(path, "_show")?;
     let mut last = 0;
 
@@ -84,7 +86,7 @@ pub struct Task {
     pub status: Option<String>,
 }
 
-pub fn get_tasks(path: &OsStr) -> io::Result<HashMap<String, Task>> {
+pub fn get_tasks(path: &OsStr) -> anyhow::Result<HashMap<String, Task>> {
     let output = run_cli(path, "export")?;
     let tasks: Vec<Task> = serde_json::from_slice(&output)?;
 

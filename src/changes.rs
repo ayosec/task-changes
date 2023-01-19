@@ -4,12 +4,23 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io;
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Format {
+    Short,
+    Long,
+}
+
 use crate::taskdb::{Change, TaskDb};
 
 use chrono::{Local, TimeZone};
 use colored::Colorize;
 
-pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io::Result<()> {
+pub fn show(
+    format: Format,
+    task_db: &TaskDb,
+    change: &Change,
+    mut output: impl io::Write,
+) -> io::Result<()> {
     let local_time = Local.timestamp(change.time, 0);
 
     // Header
@@ -32,22 +43,32 @@ pub fn show(task_db: &TaskDb, change: &Change, mut output: impl io::Write) -> io
 
     // Fields
     match &change.old {
-        None => new_fields(&mut output, &change.new)?,
-        Some(old) => diff(&mut output, &change.new, old)?,
+        None => new_fields(format, &mut output, &change.new)?,
+        Some(old) => diff(format, &mut output, &change.new, old)?,
     }
 
     writeln!(output)
 }
 
-pub fn new_fields(output: &mut impl io::Write, fields: &HashMap<String, String>) -> io::Result<()> {
+pub fn new_fields(
+    format: Format,
+    output: &mut impl io::Write,
+    fields: &HashMap<String, String>,
+) -> io::Result<()> {
     for (key, value) in fields {
-        writeln!(output, "  {}: {}", key, format_value(value).green())?;
+        writeln!(
+            output,
+            "  {}: {}",
+            key.magenta(),
+            format_value(format, value).green()
+        )?;
     }
 
     Ok(())
 }
 
 pub fn diff(
+    format: Format,
     output: &mut impl io::Write,
     new: &HashMap<String, String>,
     old: &HashMap<String, String>,
@@ -63,6 +84,11 @@ pub fn diff(
     };
 
     for field in all_fields {
+        // Skip "modified" field in short format.
+        if format == Format::Short && field == "modified" {
+            continue;
+        }
+
         let old_value = old.get(field);
         let new_value = new.get(field);
 
@@ -70,15 +96,34 @@ pub fn diff(
             continue;
         }
 
-        writeln!(output, "  {}:", field)?;
+        match format {
+            Format::Short => {
+                write!(output, " | {}", field.magenta())?;
+                if let Some(value) = old_value {
+                    write!(output, " from {}", format_value(format, value).red())?;
+                }
 
-        if let Some(value) = old_value {
-            writeln!(output, "    - {}", format_value(value).red())?;
-        }
+                if let Some(value) = new_value {
+                    write!(output, " to {}", format_value(format, value).green())?;
+                }
+            }
 
-        if let Some(value) = new_value {
-            writeln!(output, "    + {}", format_value(value).green())?;
+            Format::Long => {
+                writeln!(output, "  {}:", field.magenta())?;
+
+                if let Some(value) = old_value {
+                    writeln!(output, "    - {}", format_value(format, value).red())?;
+                }
+
+                if let Some(value) = new_value {
+                    writeln!(output, "    + {}", format_value(format, value).green())?;
+                }
+            }
         }
+    }
+
+    if format == Format::Short {
+        writeln!(output)?;
     }
 
     Ok(())
@@ -88,7 +133,7 @@ pub fn diff(
 ///
 /// If the value looks like a timestamp, it returns a formatted date.
 /// If not, it returns the original value.
-fn format_value(value: &str) -> Cow<str> {
+fn format_value(format: Format, value: &str) -> Cow<str> {
     lazy_static::lazy_static! {
         static ref NOW: i64 = chrono::Utc::now().timestamp();
     }
@@ -101,7 +146,15 @@ fn format_value(value: &str) -> Cow<str> {
         if time_range.contains(&ts) {
             let localtime = chrono::Local.timestamp(ts, 0);
             let delta = delta_time(*NOW - ts);
-            return format!("{}{}", localtime.format("%F %X %Z"), delta).into();
+            return match (format, delta) {
+                (Format::Long, Some(delta)) => {
+                    format!("{} ({})", localtime.format("%F %X %Z"), delta).into()
+                }
+
+                (Format::Short, Some(delta)) => delta.into(),
+
+                _ => format!("{}", localtime.format("%F %X %Z")).into(),
+            };
         }
     }
 
@@ -109,12 +162,12 @@ fn format_value(value: &str) -> Cow<str> {
 }
 
 /// Format a string to represent the time distance.
-fn delta_time(delta: i64) -> String {
+fn delta_time(delta: i64) -> Option<String> {
     let delta_abs = delta.abs();
 
     if delta_abs > 90 * 24 * 60 * 60 {
         // Ignore +90 days
-        return String::new();
+        return None;
     };
 
     let value;
@@ -135,5 +188,5 @@ fn delta_time(delta: i64) -> String {
     }
 
     let suffix = if delta > 0 { "ago" } else { "from now" };
-    format!(" ({} {} {})", value, unit, suffix)
+    Some(format!("{} {} {}", value, unit, suffix))
 }

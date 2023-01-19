@@ -4,6 +4,8 @@ use std::env;
 use std::ffi::OsString;
 use std::io;
 
+use clap::Parser;
+
 mod changes;
 mod pager;
 mod taskdb;
@@ -14,13 +16,31 @@ const DEFAULT_TASK_PATH: &str = "task";
 /// Environment variable to use a different command.
 const TASK_PATH_ENV: &str = "TASKWARRIOR_PATH";
 
+#[derive(Parser)]
+struct Args {
+    /// Print changes in the short format.
+    #[arg(short, long)]
+    short: bool,
+
+    /// Number of changes to print.
+    changes: Option<usize>,
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let changes_limit = get_changes_limit()?;
+    let args = Args::parse();
+
+    let changes_limit = args.changes.unwrap_or(usize::MAX);
     let taskdb = taskdb::TaskDb::new(&task_command())?;
 
     let stdout_handle;
     let pager_command;
     let mut output: Box<dyn io::Write>;
+
+    let format = if args.short {
+        changes::Format::Short
+    } else {
+        changes::Format::Long
+    };
 
     match pager::command() {
         None => {
@@ -37,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for change in taskdb.changes.iter().rev().take(changes_limit) {
-        if changes::show(&taskdb, &change, &mut output).is_err() {
+        if changes::show(format, &taskdb, change, &mut output).is_err() {
             break;
         }
     }
@@ -53,14 +73,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Find path to execute the Taskwarrior command.
 fn task_command() -> OsString {
     env::var_os(TASK_PATH_ENV).unwrap_or_else(|| OsString::from(DEFAULT_TASK_PATH))
-}
-
-/// Get number of changes to show from the command line.
-fn get_changes_limit() -> Result<usize, &'static str> {
-    let mut args = env::args().skip(1).map(|a| a.parse());
-    match (args.next(), args.next()) {
-        (None, None) => Ok(usize::MAX),
-        (Some(Ok(n)), None) => Ok(n),
-        _ => Err("Invalid arguments. Usage: task-change [count]"),
-    }
 }
