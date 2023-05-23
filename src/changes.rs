@@ -80,7 +80,10 @@ pub fn diff(
                 set.insert(k);
             }
         }
-        set
+
+        let mut fields: Vec<_> = set.into_iter().collect();
+        fields.sort();
+        fields
     };
 
     for field in all_fields {
