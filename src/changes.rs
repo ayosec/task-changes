@@ -21,7 +21,7 @@ pub fn show(
     change: &Change,
     mut output: impl io::Write,
 ) -> io::Result<()> {
-    let local_time = Local.timestamp(change.time, 0);
+    let local_time = Local.timestamp_opt(change.time, 0).unwrap();
 
     // Header
     write!(output, "{}", local_time.format("%F %X"))?;
@@ -144,7 +144,7 @@ fn format_value(format: Format, value: &str) -> Cow<str> {
     // Try to convert the value to a timestamp.
     if let Ok(ts) = value.parse() {
         if time_range.contains(&ts) {
-            let localtime = chrono::Local.timestamp(ts, 0);
+            let localtime = chrono::Local.timestamp_opt(ts, 0).unwrap();
             let delta = delta_time(*NOW - ts);
             return match (format, delta) {
                 (Format::Long, Some(delta)) => {
